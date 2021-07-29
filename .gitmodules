@@ -1,0 +1,3 @@
+[submodule "CudaSift"]
+	path = CudaSift
+	url = git@github.com:gidobot/CudaSift.git
