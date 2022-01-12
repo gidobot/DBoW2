@@ -87,6 +87,10 @@ if(BUILD_Demo)
   add_executable(load_orb demo/load_orb.cpp)
   target_link_libraries(load_orb ${PROJECT_NAME})
   set_target_properties(load_orb PROPERTIES CXX_STANDARD 11)
+
+  add_executable(make_orb_vocab demo/make_orb_vocabulary.cpp)
+  target_link_libraries(make_orb_vocab ${PROJECT_NAME} ${OpenCV_LIBS} ${Boost_LIBRARIES})
+  set_target_properties(make_orb_vocab PROPERTIES CXX_STANDARD 11)
 endif(BUILD_Demo)
 
 if(BUILD_SIFT)
@@ -96,9 +100,19 @@ if(BUILD_SIFT)
   target_link_libraries(make_sift_vocab ${PROJECT_NAME} ${OpenCV_LIBS} ${CUDA_cudadevrt_LIBRARY} ${Boost_LIBRARIES})
   set_target_properties(make_sift_vocab PROPERTIES CXX_STANDARD 11 COMPILE_FLAGS "${EXTRA_CXX_FLAGS}")
 
+  cuda_add_executable(make_sift_vocab_test demo/make_sift_vocabulary_test.cpp
+    ${cuda_sources}
+    OPTIONS -arch=sm_35)
+  target_link_libraries(make_sift_vocab_test ${PROJECT_NAME} ${OpenCV_LIBS} ${CUDA_cudadevrt_LIBRARY} ${Boost_LIBRARIES})
+  set_target_properties(make_sift_vocab_test PROPERTIES CXX_STANDARD 11 COMPILE_FLAGS "${EXTRA_CXX_FLAGS}")
+
   add_executable(yaml_to_txt demo/yaml_to_txt.cpp)
   target_link_libraries(yaml_to_txt ${PROJECT_NAME} ${OpenCV_LIBS})
   set_target_properties(yaml_to_txt PROPERTIES CXX_STANDARD 11)
+
+  add_executable(yaml_to_txt_test demo/yaml_to_txt_test.cpp)
+  target_link_libraries(yaml_to_txt_test ${PROJECT_NAME} ${OpenCV_LIBS})
+  set_target_properties(yaml_to_txt_test PROPERTIES CXX_STANDARD 11)
 
   add_executable(load_sift demo/load_sift.cpp)
   target_link_libraries(load_sift ${PROJECT_NAME})

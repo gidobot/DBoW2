@@ -1,8 +1,8 @@
 /**
- * File: make_sift_vocabulary.cpp
+ * File: make_orb_vocabulary.cpp
  * Date: July 2021
  * Author: Gideon Billings
- * Description: application to create SIFT vocabulary for DBoW2
+ * Description: application to create ORB vocabulary for DBoW2
  * License: see the LICENSE.txt file
  */
 
@@ -19,24 +19,17 @@
 #include <opencv2/highgui.hpp>
 #include <opencv2/features2d.hpp>
 
-#include "cudaImage.h"
-#include "cudaSift.h"
-
 using namespace DBoW2;
 using namespace std;
 namespace fs = boost::filesystem;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 
-void loadFeatures(vector<vector<vector<float> > > &features, const std::string img_dir);
+void loadFeatures(vector<vector<cv::Mat > > &features, const std::string img_dir);
 
-void changeStructure(const cv::Mat &plain, vector<vector<float>> &out);
+void changeStructure(const cv::Mat &plain, vector<cv::Mat> &out);
 
-void vocCreation(const vector<vector<vector<float> > > &features, const std::string base_dir);
-
-void computeFeatures(const cv::Mat& I, SiftData &siftdata);
-
-void copyCUDAFeatures(cv::Mat &descriptors, SiftData &data);
+void vocCreation(const vector<vector<cv::Mat> > &features, const std::string base_dir);
 
 // ----------------------------------------------------------------------------
 
@@ -70,7 +63,7 @@ int main(int argc, char** argv)
     return 0;
   }
 
-  vector<vector<vector<float> > > features;
+  vector<vector<cv::Mat > > features;
   loadFeatures(features, img_dir);
 
   vocCreation(features, img_dir);
@@ -80,13 +73,11 @@ int main(int argc, char** argv)
 
 // ----------------------------------------------------------------------------
 
-void loadFeatures(vector<vector<vector<float> > > &features, const std::string img_dir)
+void loadFeatures(vector<vector<cv::Mat > > &features, const std::string img_dir)
 {
   features.clear();
 
-  // Create CUDA based SIFT extractor
-  SiftData sdata;
-  InitSiftData(sdata, 2000, true, true);
+   cv::Ptr<cv::ORB> orb = cv::ORB::create();
 
   // Sort directory of images
   typedef std::vector<fs::path> path_vec;
@@ -100,7 +91,7 @@ void loadFeatures(vector<vector<vector<float> > > &features, const std::string i
   features.reserve(nimgs);
 
   // Loop over the images
-  cout << "Extracting SIFT features..." << endl;
+  cout << "Extracting ORB features..." << endl;
   int i = 1;
   while (it != v.end()) {
     cout << i << " of " << nimgs << std::endl;
@@ -127,6 +118,9 @@ void loadFeatures(vector<vector<vector<float> > > &features, const std::string i
       it++;
       continue;
     }
+    cv::Mat mask;
+    vector<cv::KeyPoint> keypoints;
+    cv::Mat descriptors;
 
     // std::string windowName = "image";
     // cv::namedWindow(windowName);
@@ -134,47 +128,39 @@ void loadFeatures(vector<vector<vector<float> > > &features, const std::string i
     // cv::waitKey(0);
     // cv::destroyWindow(windowName);
 
-    // Extract SIFT on GPU
-    computeFeatures(img, sdata);
+    orb->detectAndCompute(img, mask, keypoints, descriptors);
 
-    // Copy features to cv::Mat
-    cv::Mat descriptors;
-    copyCUDAFeatures(descriptors, sdata);
-
-    features.push_back(vector<vector<float> >());
+    features.push_back(vector<cv::Mat >());
     changeStructure(descriptors, features.back());
 
     it++;
   }
 
-  FreeSiftData(sdata);
-
 }
 
 // ----------------------------------------------------------------------------
 
-void changeStructure(const cv::Mat &plain, vector<vector<float>> &out)
+void changeStructure(const cv::Mat &plain, vector<cv::Mat> &out)
 {
   out.resize(plain.rows);
 
   for(int i = 0; i < plain.rows; ++i)
   {
-    out[i].resize(128);
-    memcpy(out[i].data(), plain.row(i).data, 128*sizeof(float));
+    out[i] = plain.row(i);
   }
 }
 
 // ----------------------------------------------------------------------------
 
-void vocCreation(const vector<vector<vector<float> > > &features, const std::string base_dir)
+void vocCreation(const vector<vector<cv::Mat > > &features, const std::string base_dir)
 {
   // branching factor and depth levels 
   const int k = 10;
   const int L = 6;
   const WeightingType weight = TF_IDF;
-  const ScoringType scoring = L2_NORM;
+  const ScoringType scoring = L1_NORM;
 
-  SiftVocabulary voc(k, L, weight, scoring);
+  OrbVocabulary voc(k, L, weight, scoring);
 
   cout << "Creating a " << k << "^" << L << " vocabulary..." << endl;
   voc.create(features);
@@ -185,40 +171,6 @@ void vocCreation(const vector<vector<vector<float> > > &features, const std::str
 
   // save the vocabulary to disk
   cout << endl << "Saving vocabulary..." << endl;
-  voc.save(base_dir + "/" + std::string("sift_voc.yml.gz"));
+  voc.save(base_dir + "/" + std::string("orb_voc.yml.gz"));
   cout << "Done" << endl;
-}
-
-// ----------------------------------------------------------------------------
-
-void copyCUDAFeatures(cv::Mat &descriptors, SiftData &data) {
-  #ifdef MANAGEDMEM
-    SiftPoint *sift = data.m_data;
-  #else
-    SiftPoint *sift = data.h_data;
-  #endif
-
-  descriptors = cv::Mat(data.numPts, 128, CV_32F);
-
-  for (int32_t i=0; i<data.numPts; i++) {
-    std::memcpy(descriptors.row(i).data, sift[i].data, 128*sizeof(float));
-  }
-}
-
-// ----------------------------------------------------------------------------
-
-void computeFeatures(const cv::Mat& I, SiftData &siftdata) {
-  cv::Mat gI;
-  I.convertTo(gI, CV_32FC1);
-  CudaImage img;
-  img.Allocate(gI.cols, gI.rows, iAlignUp(gI.cols, 128), false, NULL, (float*)gI.data);
-  img.Download();
-
-  float initBlur = 1.6f;
-  float thresh = 1.0f;
-
-  float *memoryTmpCUDA = AllocSiftTempMemory(I.cols, I.rows, 5, true);
-  // ExtractSift(siftdata, img, 5, initBlur, thresh, 0.0f, false, memoryTmpCUDA);
-  ExtractSift(siftdata, img, 5, initBlur, thresh, 0.0f, true, memoryTmpCUDA);
-  FreeSiftTempMemory(memoryTmpCUDA);
 }

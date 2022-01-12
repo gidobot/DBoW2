@@ -97,12 +97,12 @@ void loadFeatures(vector<vector<vector<float> > > &features, const std::string i
   // advance(it, 6757);
 
   int nimgs = v.size();
-  features.reserve(nimgs);
+  features.reserve(100);
 
   // Loop over the images
   cout << "Extracting SIFT features..." << endl;
   int i = 1;
-  while (it != v.end()) {
+  while (it != v.end() && i < 100) {
     cout << i << " of " << nimgs << std::endl;
     i++;
     // Check if the directory entry is a directory.
@@ -169,8 +169,8 @@ void changeStructure(const cv::Mat &plain, vector<vector<float>> &out)
 void vocCreation(const vector<vector<vector<float> > > &features, const std::string base_dir)
 {
   // branching factor and depth levels 
-  const int k = 10;
-  const int L = 6;
+  const int k = 2;
+  const int L = 2;
   const WeightingType weight = TF_IDF;
   const ScoringType scoring = L2_NORM;
 
@@ -185,7 +185,7 @@ void vocCreation(const vector<vector<vector<float> > > &features, const std::str
 
   // save the vocabulary to disk
   cout << endl << "Saving vocabulary..." << endl;
-  voc.save(base_dir + "/" + std::string("sift_voc.yml.gz"));
+  voc.save(base_dir + "/" + std::string("sift_voc_test.yml.gz"));
   cout << "Done" << endl;
 }
 
@@ -214,11 +214,12 @@ void computeFeatures(const cv::Mat& I, SiftData &siftdata) {
   img.Allocate(gI.cols, gI.rows, iAlignUp(gI.cols, 128), false, NULL, (float*)gI.data);
   img.Download();
 
-  float initBlur = 1.6f;
-  float thresh = 1.0f;
+  float initBlur = 1.0f;
+  float thresh = 1.5f;
 
-  float *memoryTmpCUDA = AllocSiftTempMemory(I.cols, I.rows, 5, true);
+  // float *memoryTmpCUDA = AllocSiftTempMemory(I.cols, I.rows, 5, false);
   // ExtractSift(siftdata, img, 5, initBlur, thresh, 0.0f, false, memoryTmpCUDA);
+  float *memoryTmpCUDA = AllocSiftTempMemory(I.cols*2, I.rows*2, 5, false);
   ExtractSift(siftdata, img, 5, initBlur, thresh, 0.0f, true, memoryTmpCUDA);
   FreeSiftTempMemory(memoryTmpCUDA);
 }
