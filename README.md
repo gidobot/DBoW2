@@ -1,3 +1,5 @@
+This fork has support added for SIFT features. There is also a utility to train a SIFT vocabulary using accelerated CudaSIFT features.
+
 DBoW2
 =====
 
